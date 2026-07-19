@@ -2,6 +2,7 @@ import os
 import google.generativeai as genai
 from config import AppSettings
 from typing import Dict, Any
+import time
 
 # 1. Load settings from config.py and environment variables
 settings = AppSettings()
@@ -23,18 +24,27 @@ def execute_agent_task(agent_name: str, agent_prompt: str, user_input: str, mode
         }
     )
     full_prompt = f"{agent_prompt}\n\nTask: {user_input}"
-    try:
-        response = model.generate_content(full_prompt)
-        text_response = response.text
-        print(f"Output: {text_response[:150]}...") # Truncate for display
-        return text_response
-    except Exception as e:
-        print(f"Error executing agent {agent_name}: {e}")
-        return f"Error: Failed to get response from {agent_name}."
+    max_retries = 3
+    retries = 0
+    while retries < max_retries:
+        try:
+            response = model.generate_content(full_prompt)
+            text_response = response.text
+            print(f"Output: {text_response[:150]}...") # Truncate for display
+            return text_response
+        except Exception as e:
+            print(f"Error executing agent {agent_name}: {e}. Retrying in 1 second...")
+            time.sleep(1)
+            retries += 1
+    print(f"Error: Failed to get response from {agent_name} after {max_retries} retries.")
+    return f"Error: Failed to get response from {agent_name}."
 
 # 4. Agent orchestrator
 def orchestrate_agents(initial_query: str, settings: AppSettings) -> Dict[str, Any]:
     """Manages the flow of tasks between declaratively defined agents."""
+    if not initial_query:
+        print("Error: Empty user query. Please provide a valid query.")
+        return {}
     context: Dict[str, Any] = {"user_query": initial_query}
     model_config = {
         "model_name": settings.model_name,
